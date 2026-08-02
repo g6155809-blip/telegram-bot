@@ -11,9 +11,9 @@ const configSchema = z.object({
   AI_INTEGRATIONS_OPENAI_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_BASE_URL: z.string().url().default("https://api.openai.com/v1"),
-  // A broadly available model is safer for Railway deployments that use
-  // OPENAI_API_KEY directly. It can still be overridden with OPENAI_CHAT_MODEL.
-  OPENAI_CHAT_MODEL: z.string().default("gpt-4o-mini"),
+  // "auto" selects a provider-compatible model at runtime. Override only
+  // when the selected provider explicitly supports the requested model.
+  OPENAI_CHAT_MODEL: z.string().default("auto"),
   OPENAI_IMAGE_MODEL: z.string().default("gpt-image-1"),
   DATA_FILE: z.string().default("./data/bot-state.json"),
 });
@@ -26,10 +26,10 @@ if (!parsed.success) {
 }
 
 const hasReplitAiIntegration =
-  Boolean(parsed.data.AI_INTEGRATIONS_OPENAI_BASE_URL) &&
-  Boolean(parsed.data.AI_INTEGRATIONS_OPENAI_API_KEY);
+  Boolean(parsed.data.AI_INTEGRATIONS_OPENAI_BASE_URL?.trim()) &&
+  Boolean(parsed.data.AI_INTEGRATIONS_OPENAI_API_KEY?.trim());
 
-if (!hasReplitAiIntegration && !parsed.data.OPENAI_API_KEY) {
+if (!hasReplitAiIntegration && !parsed.data.OPENAI_API_KEY?.trim()) {
   throw new Error(
     "Configure both Replit AI Integration variables or OPENAI_API_KEY.",
   );

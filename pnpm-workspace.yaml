@@ -36,6 +36,7 @@ minimumReleaseAgeExclude:
 
 packages:
   - artifacts/*
+  - telegram-bot
   - lib/*
   - lib/integrations/*
   - scripts

@@ -11,7 +11,9 @@ const configSchema = z.object({
   AI_INTEGRATIONS_OPENAI_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_BASE_URL: z.string().url().default("https://api.openai.com/v1"),
-  OPENAI_CHAT_MODEL: z.string().default("gpt-5.6-terra"),
+  // A broadly available model is safer for Railway deployments that use
+  // OPENAI_API_KEY directly. It can still be overridden with OPENAI_CHAT_MODEL.
+  OPENAI_CHAT_MODEL: z.string().default("gpt-4o-mini"),
   OPENAI_IMAGE_MODEL: z.string().default("gpt-image-1"),
   DATA_FILE: z.string().default("./data/bot-state.json"),
 });

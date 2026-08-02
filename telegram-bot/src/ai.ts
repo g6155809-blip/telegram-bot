@@ -40,9 +40,7 @@ export async function answerQuestion(question: string, userName: string): Promis
       },
     ] satisfies ChatMessage[],
   });
-  if (!response.ok) {
-    throw new Error(`AI request failed with status ${response.status}`);
-  }
+  if (!response.ok) throw new Error(`AI request failed with status ${response.status}`);
   const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
   const answer = data.choices?.[0]?.message?.content?.trim();
   if (!answer) throw new Error("AI returned an empty answer");
@@ -56,12 +54,8 @@ export async function generateImage(prompt: string): Promise<Buffer> {
     size: "1024x1024",
     n: 1,
   });
-  if (!response.ok) {
-    throw new Error(`Image generation failed with status ${response.status}`);
-  }
-  const data = (await response.json()) as {
-    data?: Array<{ b64_json?: string; url?: string }>;
-  };
+  if (!response.ok) throw new Error(`Image generation failed with status ${response.status}`);
+  const data = (await response.json()) as { data?: Array<{ b64_json?: string; url?: string }> };
   const image = data.data?.[0];
   if (image?.b64_json) return Buffer.from(image.b64_json, "base64");
   if (image?.url) return Buffer.from(await (await fetch(image.url)).arrayBuffer());

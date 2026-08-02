@@ -64,12 +64,6 @@ function resetIfNeeded(user: User): void {
   }
 }
 
-export function getUser(id: number): User | undefined {
-  const user = state.users[String(id)];
-  if (user) resetIfNeeded(user);
-  return user;
-}
-
 export function getOrCreateUser(
   id: number,
   firstName: string,
@@ -176,7 +170,10 @@ export function createPromoCode(diamonds: number, maxUses: number): PromoCode {
   return promo;
 }
 
-export function redeemPromo(user: User, rawCode: string): { ok: true; diamonds: number } | { ok: false; reason: string } {
+export function redeemPromo(
+  user: User,
+  rawCode: string,
+): { ok: true; diamonds: number } | { ok: false; reason: string } {
   const code = rawCode.trim().toUpperCase();
   const promo = state.promoCodes[code];
   if (!promo) return { ok: false, reason: "Промокод не найден." };

@@ -8,7 +8,6 @@ const bot = createBot();
 await bot.api.setMyCommands([
   { command: "start", description: "Открыть главное меню" },
   { command: "profile", description: "Показать профиль" },
-  { command: "admin", description: "Открыть админ-панель" },
 ]);
 
 console.info("Telegram AI bot is starting");

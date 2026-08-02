@@ -1,7 +1,13 @@
-import { Bot, type Context, InputFile, session, type SessionFlavor } from "grammy";
-import { config, normalizeUsername, ownerId } from "./config.js";
+import { Bot, InlineKeyboard, type Context, InputFile, session, type SessionFlavor } from "grammy";
 import { answerQuestion, generateImage } from "./ai.js";
-import { adminKeyboard, askKeyboard, mainKeyboard, shopKeyboard } from "./keyboards.js";
+import { config, githubUrl, normalizeUsername, ownerId } from "./config.js";
+import {
+  adminKeyboard,
+  askKeyboard,
+  githubKeyboard,
+  mainKeyboard,
+  shopKeyboard,
+} from "./keyboards.js";
 import {
   addAdmin,
   addRequests,
@@ -30,6 +36,10 @@ function isAdmin(ctx: BotContext): boolean {
   return user.id === ownerId || user.isAdmin;
 }
 
+function mainMenu(ctx: BotContext) {
+  return mainKeyboard(isAdmin(ctx));
+}
+
 function displayName(user: User): string {
   return user.username ? `@${user.username}` : user.firstName;
 }
@@ -42,21 +52,21 @@ function clearPending(ctx: BotContext): void {
 function profileText(user: User): string {
   const status = requestStatus(user);
   return [
-    "Профиль",
+    "👤 Профиль",
     "",
-    `Пользователь: ${displayName(user)}`,
-    `Дата регистрации: ${new Date(user.registeredAt).toLocaleString("ru-RU")}`,
-    `Алмазы: ${user.diamonds} ♦`,
-    `Запросы сегодня: ${status.used}/${status.limit}`,
-    `Доступно сейчас: ${status.remaining}`,
-    `Рефералы: ${user.referredUserIds.length}`,
-    `Админ-панель: ${user.isAdmin || user.id === ownerId ? "доступна" : "нет"}`,
+    `🙋 Пользователь: ${displayName(user)}`,
+    `📅 Дата регистрации: ${new Date(user.registeredAt).toLocaleString("ru-RU")}`,
+    `💎 Алмазы: ${user.diamonds} ♦`,
+    `📊 Запросы сегодня: ${status.used}/${status.limit}`,
+    `⚡ Доступно сейчас: ${status.remaining}`,
+    `🤝 Рефералы: ${user.referredUserIds.length}`,
+    `🛡️ Админ-панель: ${user.isAdmin || user.id === ownerId ? "доступна" : "нет"}`,
   ].join("\n");
 }
 
 async function home(ctx: BotContext): Promise<void> {
   clearPending(ctx);
-  await ctx.reply("Главное меню. Выберите действие:", { reply_markup: mainKeyboard });
+  await ctx.reply("🏠 Главное меню\n\nВыберите действие:", { reply_markup: mainMenu(ctx) });
 }
 
 async function start(ctx: BotContext): Promise<void> {
@@ -69,13 +79,13 @@ async function start(ctx: BotContext): Promise<void> {
     if (Number.isInteger(inviterId) && markReferral(inviterId, from.id)) {
       await ctx.api.sendMessage(
         inviterId,
-        "Новый участник присоединился по вашей ссылке. Вам начислено 10 ♦.",
+        "🎉 Новый участник присоединился по вашей ссылке. Вам начислено 10 ♦.",
       );
     }
   }
   await ctx.reply(
-    `Привет, ${from.first_name}! Я профессиональный AI-помощник: отвечаю на вопросы и умею создавать изображения.\n\nВам доступно 5 запросов в день. Используйте меню ниже.`,
-    { reply_markup: mainKeyboard },
+    `✨ Привет, ${from.first_name}!\n\nЯ AI-помощник: отвечаю на вопросы и умею создавать изображения.\n\n📌 Вам доступно 5 запросов в день. Используйте меню ниже.`,
+    { reply_markup: mainMenu(ctx) },
   );
 }
 
@@ -84,7 +94,7 @@ async function ask(ctx: BotContext): Promise<void> {
   const status = requestStatus(user);
   ctx.session.pending = "question";
   await ctx.reply(
-    `Привет, ${user.firstName}! Спросите меня о чем угодно — я отвечу и могу сгенерировать изображение.\n\nОсталось запросов: ${status.remaining}`,
+    `💬 Привет, ${user.firstName}!\n\nСпросите меня о чем угодно — я отвечу и могу сгенерировать изображение.\n\n⚡ Осталось запросов: ${status.remaining}`,
     { reply_markup: askKeyboard() },
   );
 }
@@ -94,20 +104,20 @@ async function handleQuestion(ctx: BotContext, text: string): Promise<void> {
   if (!consumeRequest(user)) {
     clearPending(ctx);
     await ctx.reply(
-      "Дневной лимит исчерпан. Пригласите друзей или купите дополнительные запросы за алмазы.",
-      { reply_markup: mainKeyboard },
+      "⏳ Дневной лимит исчерпан. Пригласите друзей или купите дополнительные запросы за алмазы.",
+      { reply_markup: mainMenu(ctx) },
     );
     return;
   }
   clearPending(ctx);
-  await ctx.reply("Думаю над ответом...");
+  await ctx.reply("🧠 Думаю над ответом...");
   try {
     const answer = await answerQuestion(text, displayName(user));
-    await ctx.reply(answer, { reply_markup: mainKeyboard });
+    await ctx.reply(answer, { reply_markup: mainMenu(ctx) });
   } catch (error) {
     await ctx.reply(
-      "Не удалось получить ответ от AI. Запрос не пропал — попробуйте ещё раз позже.",
-      { reply_markup: mainKeyboard },
+      "⚠️ Не удалось получить ответ от AI. Запрос не пропал — попробуйте ещё раз позже.",
+      { reply_markup: mainMenu(ctx) },
     );
     console.error(error);
   }
@@ -117,23 +127,23 @@ async function handleImage(ctx: BotContext, prompt: string): Promise<void> {
   const user = userFrom(ctx);
   if (!consumeRequest(user)) {
     clearPending(ctx);
-    await ctx.reply("Лимит запросов исчерпан. Получите дополнительные запросы в разделе покупки.", {
-      reply_markup: mainKeyboard,
+    await ctx.reply("⏳ Лимит запросов исчерпан. Получите дополнительные запросы в разделе покупки.", {
+      reply_markup: mainMenu(ctx),
     });
     return;
   }
   clearPending(ctx);
-  await ctx.reply("Генерирую изображение...");
+  await ctx.reply("🎨 Генерирую изображение...");
   try {
     const image = await generateImage(prompt);
     await ctx.replyWithPhoto(new InputFile(image, "generated.png"), {
-      caption: "Готово. Если хотите — задайте следующий запрос.",
-      reply_markup: mainKeyboard,
+      caption: "✅ Готово! Если хотите — задайте следующий запрос.",
+      reply_markup: mainMenu(ctx),
     });
   } catch (error) {
     await ctx.reply(
-      "Не удалось создать изображение. Запрос не пропал — попробуйте другое описание.",
-      { reply_markup: mainKeyboard },
+      "⚠️ Не удалось создать изображение. Запрос не пропал — попробуйте другое описание.",
+      { reply_markup: mainMenu(ctx) },
     );
     console.error(error);
   }
@@ -155,8 +165,8 @@ async function handlePending(ctx: BotContext, text: string): Promise<boolean> {
     clearPending(ctx);
     const result = redeemPromo(user, text);
     await ctx.reply(
-      result.ok ? `Промокод активирован. Начислено ${result.diamonds} ♦.` : result.reason,
-      { reply_markup: mainKeyboard },
+      result.ok ? `✅ Промокод активирован. Начислено ${result.diamonds} ♦.` : `⚠️ ${result.reason}`,
+      { reply_markup: mainMenu(ctx) },
     );
     return true;
   }
@@ -181,8 +191,8 @@ async function handlePending(ctx: BotContext, text: string): Promise<boolean> {
     clearPending(ctx);
     const promo = createPromoCode(diamonds, maxUses);
     await ctx.reply(
-      `Промокод создан:\n\n${promo.code}\n\nАлмазы: ${diamonds}\nИспользований: ${maxUses === 0 ? "без ограничений" : maxUses}`,
-      { reply_markup: adminKeyboard() },
+      `✅ Промокод создан:\n\n<code>${promo.code}</code>\n\n💎 Алмазы: ${diamonds}\n🔁 Использований: ${maxUses === 0 ? "без ограничений" : maxUses}`,
+      { reply_markup: adminKeyboard(), parse_mode: "HTML" },
     );
     return true;
   }
@@ -213,7 +223,7 @@ async function handlePending(ctx: BotContext, text: string): Promise<boolean> {
     }
     clearPending(ctx);
     addRequests(target, amount);
-    await ctx.reply(`Выдано ${amount} запросов пользователю @${target.username}.`, {
+    await ctx.reply(`✅ Выдано ${amount} запросов пользователю @${target.username}.`, {
       reply_markup: adminKeyboard(),
     });
     return true;
@@ -227,7 +237,7 @@ async function handlePending(ctx: BotContext, text: string): Promise<boolean> {
       });
     } else {
       addAdmin(target);
-      await ctx.reply(`Админ-панель выдана пользователю @${target.username}.`, {
+      await ctx.reply(`👑 Админ-панель выдана пользователю @${target.username}.`, {
         reply_markup: adminKeyboard(),
       });
     }
@@ -238,55 +248,57 @@ async function handlePending(ctx: BotContext, text: string): Promise<boolean> {
 
 async function openAdmin(ctx: BotContext): Promise<void> {
   if (!isAdmin(ctx)) {
-    await ctx.reply("Доступ запрещён.", { reply_markup: mainKeyboard });
+    await ctx.reply("⛔ Доступ запрещён.", { reply_markup: mainMenu(ctx) });
     return;
   }
   clearPending(ctx);
-  await ctx.reply(`Админ-панель. Пользователей: ${allUserCount()}`, {
+  await ctx.reply(`🛠️ Админ-панель\n\n👥 Пользователей: ${allUserCount()}`, {
     reply_markup: adminKeyboard(),
   });
 }
 
 async function createPromo(ctx: BotContext): Promise<void> {
   if (!isAdmin(ctx)) {
-    await ctx.reply("Доступ запрещён.", { reply_markup: mainKeyboard });
+    await ctx.reply("⛔ Доступ запрещён.", { reply_markup: mainMenu(ctx) });
     return;
   }
   ctx.session.pending = "admin_promo_diamonds";
-  await ctx.reply("Введите количество алмазов для промокода (1–10 000 000 000):", {
+  await ctx.reply("💎 Введите количество алмазов для промокода (1–10 000 000 000):", {
     reply_markup: adminKeyboard(),
   });
 }
 
 async function grantRequests(ctx: BotContext): Promise<void> {
   if (!isAdmin(ctx)) {
-    await ctx.reply("Доступ запрещён.", { reply_markup: mainKeyboard });
+    await ctx.reply("⛔ Доступ запрещён.", { reply_markup: mainMenu(ctx) });
     return;
   }
   ctx.session.pending = "admin_grant_requests_user";
-  await ctx.reply("Введите юзернейм пользователя:", { reply_markup: adminKeyboard() });
+  await ctx.reply("👤 Введите юзернейм пользователя:", { reply_markup: adminKeyboard() });
 }
 
 async function grantAdmin(ctx: BotContext): Promise<void> {
   if (!isAdmin(ctx)) {
-    await ctx.reply("Доступ запрещён.", { reply_markup: mainKeyboard });
+    await ctx.reply("⛔ Доступ запрещён.", { reply_markup: mainMenu(ctx) });
     return;
   }
   ctx.session.pending = "admin_grant_admin";
-  await ctx.reply("Введите юзернейм пользователя:", { reply_markup: adminKeyboard() });
+  await ctx.reply("👑 Введите юзернейм пользователя:", { reply_markup: adminKeyboard() });
 }
 
 async function purchaseRequests(ctx: BotContext, amount: number, cost: number): Promise<void> {
   const user = userFrom(ctx);
   if (!buyRequests(user, amount, cost)) {
-    await ctx.reply(`Недостаточно алмазов. Нужно ${cost} ♦, у вас ${user.diamonds} ♦.`, {
-      reply_markup: mainKeyboard,
+    await ctx.reply(`⚠️ Недостаточно алмазов. Нужно ${cost} ♦, у вас ${user.diamonds} ♦.`, {
+      reply_markup: mainMenu(ctx),
     });
     return;
   }
   await ctx.reply(
-    amount === Number.POSITIVE_INFINITY ? "Активированы бесконечные запросы." : `Начислено ${amount} запросов.`,
-    { reply_markup: mainKeyboard },
+    amount === Number.POSITIVE_INFINITY
+      ? "✅ Активированы бесконечные запросы."
+      : `✅ Начислено ${amount} запросов.`,
+    { reply_markup: mainMenu(ctx) },
   );
 }
 
@@ -296,47 +308,49 @@ export function createBot(): Bot<BotContext> {
 
   bot.command("start", start);
   bot.command("profile", async (ctx) =>
-    ctx.reply(profileText(userFrom(ctx)), { reply_markup: mainKeyboard }),
+    ctx.reply(profileText(userFrom(ctx)), { reply_markup: mainMenu(ctx) }),
   );
   bot.command("admin", openAdmin);
 
-  bot.hears("Задать вопрос", ask);
-  bot.hears("Профиль", async (ctx) => {
+  bot.hears("💬 Задать вопрос", ask);
+  bot.hears("👤 Профиль", async (ctx) => {
     clearPending(ctx);
-    await ctx.reply(profileText(userFrom(ctx)), { reply_markup: mainKeyboard });
+    await ctx.reply(profileText(userFrom(ctx)), { reply_markup: mainMenu(ctx) });
   });
-  bot.hears("Ввести промокод", async (ctx) => {
+  bot.hears("🎟️ Ввести промокод", async (ctx) => {
     ctx.session.pending = "promo";
-    await ctx.reply("Введите промокод:", { reply_markup: mainKeyboard });
+    await ctx.reply("🎟️ Введите промокод:", { reply_markup: mainMenu(ctx) });
   });
-  bot.hears("Купить запросы", async (ctx) => {
+  bot.hears("💎 Купить запросы", async (ctx) => {
     clearPending(ctx);
-    await ctx.reply("Выберите пакет. Алмазы начисляются через рефералов или промокоды.", {
+    await ctx.reply("💎 Выберите пакет. Алмазы начисляются через рефералов или промокоды.", {
       reply_markup: shopKeyboard(),
     });
   });
-  bot.hears("Заработать алмазы", async (ctx) => {
+  bot.hears("🤝 Заработать алмазы", async (ctx) => {
     const user = userFrom(ctx);
     const me = await ctx.api.getMe();
     const link = `https://t.me/${me.username}?start=ref_${user.id}`;
     await ctx.reply(
-      `За каждого нового участника вы получите 10 ♦.\n\nПриглашено: ${user.referredUserIds.length}\nВаша ссылка:\n${link}`,
-      { reply_markup: mainKeyboard },
+      `🤝 За каждого нового участника вы получите 10 ♦.\n\n👥 Приглашено: ${user.referredUserIds.length}\n🔗 Ваша ссылка:\n${link}`,
+      { reply_markup: mainMenu(ctx) },
     );
   });
-
-  // These are reply-keyboard buttons, so they appear below the message field.
-  bot.hears("Сгенерировать изображение", async (ctx) => {
+  bot.hears("🔗 GitHub проекта", async (ctx) => {
+    clearPending(ctx);
+    await ctx.reply(`📦 Исходный код проекта:\n${githubUrl}`, { reply_markup: githubKeyboard });
+  });
+  bot.hears("🎨 Сгенерировать изображение", async (ctx) => {
     ctx.session.pending = "image";
-    await ctx.reply("Опишите изображение, которое нужно создать.", {
+    await ctx.reply("🎨 Опишите изображение, которое нужно создать.", {
       reply_markup: askKeyboard(),
     });
   });
-  bot.hears("Назад", home);
-  bot.hears("Админ-панель", openAdmin);
-  bot.hears("Создать промокод", createPromo);
-  bot.hears("Выдать запросы", grantRequests);
-  bot.hears("Выдать админ-панель", grantAdmin);
+  bot.hears("↩️ Назад", home);
+  bot.hears("🛠️ Админ-панель", openAdmin);
+  bot.hears("🧾 Создать промокод", createPromo);
+  bot.hears("🎁 Выдать запросы", grantRequests);
+  bot.hears("👑 Выдать админ-панель", grantAdmin);
   bot.hears("5 запросов — 100 ♦", (ctx) => purchaseRequests(ctx, 5, 100));
   bot.hears("10 запросов — 300 ♦", (ctx) => purchaseRequests(ctx, 10, 300));
   bot.hears("20 запросов — 400 ♦", (ctx) => purchaseRequests(ctx, 20, 400));
@@ -349,7 +363,7 @@ export function createBot(): Bot<BotContext> {
     const text = ctx.message.text.trim();
     if (await handlePending(ctx, text)) return;
     if (text.startsWith("/")) return;
-    await ctx.reply("Выберите действие в меню.", { reply_markup: mainKeyboard });
+    await ctx.reply("ℹ️ Выберите действие в меню.", { reply_markup: mainMenu(ctx) });
   });
 
   bot.catch((error) => {

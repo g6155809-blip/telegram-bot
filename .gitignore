@@ -47,3 +47,7 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Local bot data and secrets
+telegram-bot/.env
+telegram-bot/data/

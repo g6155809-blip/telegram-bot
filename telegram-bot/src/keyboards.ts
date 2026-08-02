@@ -1,23 +1,28 @@
-import { Keyboard } from "grammy";
+import { InlineKeyboard, Keyboard } from "grammy";
+import { githubUrl } from "./config.js";
 
-export const mainKeyboard = new Keyboard()
-  .text("Задать вопрос")
-  .text("Профиль")
-  .row()
-  .text("Ввести промокод")
-  .text("Купить запросы")
-  .row()
-  .text("Заработать алмазы")
-  .row()
-  .text("Админ-панель")
-  .resized()
-  .persistent();
+export function mainKeyboard(isAdmin = false): Keyboard {
+  const keyboard = new Keyboard()
+    .text("💬 Задать вопрос")
+    .text("👤 Профиль")
+    .row()
+    .text("🎟️ Ввести промокод")
+    .text("💎 Купить запросы")
+    .row()
+    .text("🤝 Заработать алмазы")
+    .text("🔗 GitHub проекта");
+
+  if (isAdmin) keyboard.row().text("🛠️ Админ-панель");
+  return keyboard.resized().persistent();
+}
+
+export const githubKeyboard = new InlineKeyboard().url("🔗 Открыть репозиторий", githubUrl);
 
 export function askKeyboard(): Keyboard {
   return new Keyboard()
-    .text("Сгенерировать изображение")
+    .text("🎨 Сгенерировать изображение")
     .row()
-    .text("Назад")
+    .text("↩️ Назад")
     .resized()
     .persistent();
 }
@@ -32,20 +37,20 @@ export function shopKeyboard(): Keyboard {
     .row()
     .text("∞ запросов — 50 000 ♦")
     .row()
-    .text("Назад")
+    .text("↩️ Назад")
     .resized()
     .persistent();
 }
 
 export function adminKeyboard(): Keyboard {
   return new Keyboard()
-    .text("Создать промокод")
+    .text("🧾 Создать промокод")
     .row()
-    .text("Выдать запросы")
+    .text("🎁 Выдать запросы")
     .row()
-    .text("Выдать админ-панель")
+    .text("👑 Выдать админ-панель")
     .row()
-    .text("Назад")
+    .text("↩️ Назад")
     .resized()
     .persistent();
 }

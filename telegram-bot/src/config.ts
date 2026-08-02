@@ -3,8 +3,10 @@ import { z } from "zod";
 
 const configSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(1, "TELEGRAM_BOT_TOKEN is required"),
-  ADMIN_TELEGRAM_ID: z.coerce.number().int().positive("ADMIN_TELEGRAM_ID must be a positive integer"),
-  ADMIN_USERNAME: z.string().optional().transform((value) => value?.replace(/^@/, "").toLowerCase()),
+  ADMIN_TELEGRAM_ID: z.coerce
+    .number()
+    .int()
+    .positive("ADMIN_TELEGRAM_ID must be a positive integer"),
   AI_INTEGRATIONS_OPENAI_BASE_URL: z.string().url().optional().or(z.literal("")),
   AI_INTEGRATIONS_OPENAI_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
@@ -29,6 +31,7 @@ if (!parsed.data.AI_INTEGRATIONS_OPENAI_API_KEY && !parsed.data.OPENAI_API_KEY) 
 
 export const config = parsed.data;
 export const ownerId = config.ADMIN_TELEGRAM_ID;
+export const githubUrl = "https://github.com/g6155809-blip/telegram-bot";
 
 export function normalizeUsername(username?: string): string | undefined {
   return username?.replace(/^@/, "").trim().toLowerCase() || undefined;

@@ -1,4 +1,4 @@
-import { InlineKeyboard, Keyboard } from "grammy";
+import { Keyboard } from "grammy";
 
 export const mainKeyboard = new Keyboard()
   .text("Задать вопрос")
@@ -8,36 +8,44 @@ export const mainKeyboard = new Keyboard()
   .text("Купить запросы")
   .row()
   .text("Заработать алмазы")
+  .row()
+  .text("Админ-панель")
   .resized()
   .persistent();
 
-export function askKeyboard(): InlineKeyboard {
-  return new InlineKeyboard()
-    .text("Сгенерировать изображение", "ask:image")
+export function askKeyboard(): Keyboard {
+  return new Keyboard()
+    .text("Сгенерировать изображение")
     .row()
-    .text("Назад", "nav:home");
+    .text("Назад")
+    .resized()
+    .persistent();
 }
 
-export function shopKeyboard(): InlineKeyboard {
-  return new InlineKeyboard()
-    .text("5 запросов — 100 ♦", "buy:5:100")
-    .text("10 запросов — 300 ♦", "buy:10:300")
+export function shopKeyboard(): Keyboard {
+  return new Keyboard()
+    .text("5 запросов — 100 ♦")
+    .text("10 запросов — 300 ♦")
     .row()
-    .text("20 запросов — 400 ♦", "buy:20:400")
-    .text("100 запросов — 1500 ♦", "buy:100:1500")
+    .text("20 запросов — 400 ♦")
+    .text("100 запросов — 1500 ♦")
     .row()
-    .text("∞ запросов — 50 000 ♦", "buy:inf:50000")
+    .text("∞ запросов — 50 000 ♦")
     .row()
-    .text("Назад", "nav:home");
+    .text("Назад")
+    .resized()
+    .persistent();
 }
 
-export function adminKeyboard(): InlineKeyboard {
-  return new InlineKeyboard()
-    .text("Создать промокод", "admin:create_promo")
+export function adminKeyboard(): Keyboard {
+  return new Keyboard()
+    .text("Создать промокод")
     .row()
-    .text("Выдать запросы", "admin:grant_requests")
+    .text("Выдать запросы")
     .row()
-    .text("Выдать админ-панель", "admin:grant_admin")
+    .text("Выдать админ-панель")
     .row()
-    .text("Назад", "nav:home");
+    .text("Назад")
+    .resized()
+    .persistent();
 }

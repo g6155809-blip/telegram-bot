@@ -82,6 +82,7 @@ export function getOrCreateUser(
     user = newUser(id, firstName, username);
     state.users[key] = user;
     created = true;
+    save();
   } else {
     resetIfNeeded(user);
     user.firstName = firstName;
@@ -156,13 +157,6 @@ export function addRequests(user: User, amount: number): void {
 export function addAdmin(user: User): void {
   user.isAdmin = true;
   save();
-}
-
-export function revokeAdmin(user: User): void {
-  if (user.id !== ownerId) {
-    user.isAdmin = false;
-    save();
-  }
 }
 
 export function createPromoCode(diamonds: number, maxUses: number): PromoCode {

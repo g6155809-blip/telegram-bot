@@ -15,7 +15,7 @@ import {
   redeemPromo,
   requestStatus,
 } from "./storage.js";
-import type { PendingAction, SessionData, User } from "./types.js";
+import type { SessionData, User } from "./types.js";
 
 type BotContext = Context & SessionFlavor<SessionData>;
 
@@ -69,7 +69,7 @@ async function start(ctx: BotContext): Promise<void> {
     if (Number.isInteger(inviterId) && markReferral(inviterId, from.id)) {
       await ctx.api.sendMessage(
         inviterId,
-        `Новый участник присоединился по вашей ссылке. Вам начислено 10 ♦.`,
+        "Новый участник присоединился по вашей ссылке. Вам начислено 10 ♦.",
       );
     }
   }
@@ -180,9 +180,10 @@ async function handlePending(ctx: BotContext, text: string): Promise<boolean> {
     }
     clearPending(ctx);
     const promo = createPromoCode(diamonds, maxUses);
-    await ctx.reply(`Промокод создан:\n\n${promo.code}\n\nАлмазы: ${diamonds}\nИспользований: ${maxUses === 0 ? "без ограничений" : maxUses}`, {
-      reply_markup: adminKeyboard(),
-    });
+    await ctx.reply(
+      `Промокод создан:\n\n${promo.code}\n\nАлмазы: ${diamonds}\nИспользований: ${maxUses === 0 ? "без ограничений" : maxUses}`,
+      { reply_markup: adminKeyboard() },
+    );
     return true;
   }
   if (pending === "admin_grant_requests_user") {
@@ -235,19 +236,69 @@ async function handlePending(ctx: BotContext, text: string): Promise<boolean> {
   return false;
 }
 
+async function openAdmin(ctx: BotContext): Promise<void> {
+  if (!isAdmin(ctx)) {
+    await ctx.reply("Доступ запрещён.", { reply_markup: mainKeyboard });
+    return;
+  }
+  clearPending(ctx);
+  await ctx.reply(`Админ-панель. Пользователей: ${allUserCount()}`, {
+    reply_markup: adminKeyboard(),
+  });
+}
+
+async function createPromo(ctx: BotContext): Promise<void> {
+  if (!isAdmin(ctx)) {
+    await ctx.reply("Доступ запрещён.", { reply_markup: mainKeyboard });
+    return;
+  }
+  ctx.session.pending = "admin_promo_diamonds";
+  await ctx.reply("Введите количество алмазов для промокода (1–10 000 000 000):", {
+    reply_markup: adminKeyboard(),
+  });
+}
+
+async function grantRequests(ctx: BotContext): Promise<void> {
+  if (!isAdmin(ctx)) {
+    await ctx.reply("Доступ запрещён.", { reply_markup: mainKeyboard });
+    return;
+  }
+  ctx.session.pending = "admin_grant_requests_user";
+  await ctx.reply("Введите юзернейм пользователя:", { reply_markup: adminKeyboard() });
+}
+
+async function grantAdmin(ctx: BotContext): Promise<void> {
+  if (!isAdmin(ctx)) {
+    await ctx.reply("Доступ запрещён.", { reply_markup: mainKeyboard });
+    return;
+  }
+  ctx.session.pending = "admin_grant_admin";
+  await ctx.reply("Введите юзернейм пользователя:", { reply_markup: adminKeyboard() });
+}
+
+async function purchaseRequests(ctx: BotContext, amount: number, cost: number): Promise<void> {
+  const user = userFrom(ctx);
+  if (!buyRequests(user, amount, cost)) {
+    await ctx.reply(`Недостаточно алмазов. Нужно ${cost} ♦, у вас ${user.diamonds} ♦.`, {
+      reply_markup: mainKeyboard,
+    });
+    return;
+  }
+  await ctx.reply(
+    amount === Number.POSITIVE_INFINITY ? "Активированы бесконечные запросы." : `Начислено ${amount} запросов.`,
+    { reply_markup: mainKeyboard },
+  );
+}
+
 export function createBot(): Bot<BotContext> {
   const bot = new Bot<BotContext>(config.TELEGRAM_BOT_TOKEN);
   bot.use(session({ initial: (): SessionData => ({}) }));
 
   bot.command("start", start);
-  bot.command("profile", async (ctx) => ctx.reply(profileText(userFrom(ctx)), { reply_markup: mainKeyboard }));
-  bot.command("admin", async (ctx) => {
-    if (!isAdmin(ctx)) {
-      await ctx.reply("Доступ запрещён.");
-      return;
-    }
-    await ctx.reply(`Админ-панель. Пользователей: ${allUserCount()}`, { reply_markup: adminKeyboard() });
-  });
+  bot.command("profile", async (ctx) =>
+    ctx.reply(profileText(userFrom(ctx)), { reply_markup: mainKeyboard }),
+  );
+  bot.command("admin", openAdmin);
 
   bot.hears("Задать вопрос", ask);
   bot.hears("Профиль", async (ctx) => {
@@ -268,63 +319,31 @@ export function createBot(): Bot<BotContext> {
     const user = userFrom(ctx);
     const me = await ctx.api.getMe();
     const link = `https://t.me/${me.username}?start=ref_${user.id}`;
-    await ctx.reply(`За каждого нового участника вы получите 10 ♦.\n\nПриглашено: ${user.referredUserIds.length}\nВаша ссылка:\n${link}`, {
-      reply_markup: mainKeyboard,
-    });
+    await ctx.reply(
+      `За каждого нового участника вы получите 10 ♦.\n\nПриглашено: ${user.referredUserIds.length}\nВаша ссылка:\n${link}`,
+      { reply_markup: mainKeyboard },
+    );
   });
 
-  bot.callbackQuery("ask:image", async (ctx) => {
-    await ctx.answerCallbackQuery();
+  // These are reply-keyboard buttons, so they appear below the message field.
+  bot.hears("Сгенерировать изображение", async (ctx) => {
     ctx.session.pending = "image";
-    await ctx.reply("Опишите изображение, которое нужно создать:");
-  });
-  bot.callbackQuery("nav:home", async (ctx) => {
-    await ctx.answerCallbackQuery();
-    await home(ctx);
-  });
-  bot.callbackQuery(/^buy:(5|10|20|100|inf):(\d+)$/, async (ctx) => {
-    await ctx.answerCallbackQuery();
-    const match = ctx.callbackQuery.data.match(/^buy:(5|10|20|100|inf):(\d+)$/);
-    if (!match) return;
-    const amount = match[1] === "inf" ? Number.POSITIVE_INFINITY : Number(match[1]);
-    const cost = Number(match[2]);
-    const user = userFrom(ctx);
-    if (!buyRequests(user, amount, cost)) {
-      await ctx.reply(`Недостаточно алмазов. Нужно ${cost} ♦, у вас ${user.diamonds} ♦.`);
-      return;
-    }
-    await ctx.reply(amount === Number.POSITIVE_INFINITY ? "Активированы бесконечные запросы." : `Начислено ${amount} запросов.`, {
-      reply_markup: mainKeyboard,
+    await ctx.reply("Опишите изображение, которое нужно создать.", {
+      reply_markup: askKeyboard(),
     });
   });
-
-  bot.callbackQuery("admin:create_promo", async (ctx) => {
-    await ctx.answerCallbackQuery();
-    if (!isAdmin(ctx)) {
-      await ctx.reply("Доступ запрещён.");
-      return;
-    }
-    ctx.session.pending = "admin_promo_diamonds";
-    await ctx.reply("Введите количество алмазов для промокода (1–10 000 000 000):");
-  });
-  bot.callbackQuery("admin:grant_requests", async (ctx) => {
-    await ctx.answerCallbackQuery();
-    if (!isAdmin(ctx)) {
-      await ctx.reply("Доступ запрещён.");
-      return;
-    }
-    ctx.session.pending = "admin_grant_requests_user";
-    await ctx.reply("Введите юзернейм пользователя:");
-  });
-  bot.callbackQuery("admin:grant_admin", async (ctx) => {
-    await ctx.answerCallbackQuery();
-    if (!isAdmin(ctx)) {
-      await ctx.reply("Доступ запрещён.");
-      return;
-    }
-    ctx.session.pending = "admin_grant_admin";
-    await ctx.reply("Введите юзернейм пользователя:");
-  });
+  bot.hears("Назад", home);
+  bot.hears("Админ-панель", openAdmin);
+  bot.hears("Создать промокод", createPromo);
+  bot.hears("Выдать запросы", grantRequests);
+  bot.hears("Выдать админ-панель", grantAdmin);
+  bot.hears("5 запросов — 100 ♦", (ctx) => purchaseRequests(ctx, 5, 100));
+  bot.hears("10 запросов — 300 ♦", (ctx) => purchaseRequests(ctx, 10, 300));
+  bot.hears("20 запросов — 400 ♦", (ctx) => purchaseRequests(ctx, 20, 400));
+  bot.hears("100 запросов — 1500 ♦", (ctx) => purchaseRequests(ctx, 100, 1500));
+  bot.hears("∞ запросов — 50 000 ♦", (ctx) =>
+    purchaseRequests(ctx, Number.POSITIVE_INFINITY, 50_000),
+  );
 
   bot.on("message:text", async (ctx) => {
     const text = ctx.message.text.trim();

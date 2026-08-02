@@ -1,4 +1,4 @@
-import { config, usesReplitAiIntegration } from "./config.js";
+import { aiProviderName, config, usesReplitAiIntegration } from "./config.js";
 
 type ChatMessage = {
   role: "system" | "user" | "assistant";
@@ -82,6 +82,29 @@ async function describeApiError(response: Response): Promise<string> {
     : `AI request failed with status ${response.status}`;
 }
 
+export class AiServiceError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = "AiServiceError";
+  }
+
+  get userMessage(): string {
+    if (this.status === 401 || this.status === 403) {
+      return `⚠️ ${aiProviderName} отклонил ключ. Проверьте, что ключ скопирован полностью, активен и добавлен именно в Variables используемого Railway-сервиса.`;
+    }
+    if (this.status === 402) {
+      return `⚠️ У ${aiProviderName} нет доступного баланса для API. Пополните баланс или включите оплату API.`;
+    }
+    if (this.status === 429) {
+      return `⚠️ ${aiProviderName} временно ограничил запросы. Проверьте лимиты и баланс API, затем попробуйте снова.`;
+    }
+    return "⚠️ AI-сервис временно недоступен. Запрос возвращён — попробуйте ещё раз позже.";
+  }
+}
+
 export async function answerQuestion(question: string, userName: string): Promise<string> {
   let lastError = "AI returned an empty answer";
   const messages = [
@@ -111,8 +134,9 @@ export async function answerQuestion(question: string, userName: string): Promis
       // A 400/404 commonly means an unavailable model or unsupported
       // parameter. Try the next provider-compatible model.
       if ([400, 404].includes(response.status)) continue;
-      throw new Error(
+      throw new AiServiceError(
         `${lastError} (provider: ${usesReplitAiIntegration ? "Replit AI" : "OpenAI"})`,
+        response.status,
       );
     }
 
@@ -124,7 +148,7 @@ export async function answerQuestion(question: string, userName: string): Promis
     lastError = `AI returned an empty answer for model ${model}`;
   }
 
-  throw new Error(
+  throw new AiServiceError(
     `${lastError} (provider: ${usesReplitAiIntegration ? "Replit AI" : "OpenAI"})`,
   );
 }
@@ -136,7 +160,12 @@ export async function generateImage(prompt: string): Promise<Buffer> {
     size: "1024x1024",
     n: 1,
   });
-  if (!response.ok) throw new Error(await describeApiError(response));
+  if (!response.ok) {
+    throw new AiServiceError(
+      `${await describeApiError(response)} (provider: ${aiProviderName})`,
+      response.status,
+    );
+  }
   const data = (await response.json()) as { data?: Array<{ b64_json?: string; url?: string }> };
   const image = data.data?.[0];
   if (image?.b64_json) return Buffer.from(image.b64_json, "base64");

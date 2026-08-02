@@ -2,6 +2,9 @@
 
 Для ZModeler скачай полный архив:
 
+- `original_arachnid_hero_truth_rig_complete.zip` — новая версия с точным 32-костным скелетом оригинального скина
+- `original_arachnid_hero_truth_rig.dff` — retargeted DFF для этого игрового слота
+- `original_arachnid_hero_truth_rig_dff_only.dff` — retargeted DFF без TXD
 - `original_arachnid_hero_dff_only.dff` — цвет встроен в DFF, TXD не нужен
 - `original_arachnid_hero_dff_only.zip` — архив только с DFF-only моделью
 - `original_arachnid_hero_zmodeler_complete.zip` — DFF, TXD и PNG вместе
@@ -24,3 +27,8 @@
 У этой версии цвет запечён в vertex colors, поэтому отдельный TXD или PNG
 не требуется. Изображение может быть немного менее детальным, чем у
 текстурной версии.
+
+Для исправленного игрового скина используй `original_arachnid_hero_truth_rig.dff`
+вместе с `original_arachnid_hero_zmodeler.txd`. Эта версия использует
+скелет из загруженного оригинального DFF слота. Если TXD не нужен, используй
+`original_arachnid_hero_truth_rig_dff_only.dff`.

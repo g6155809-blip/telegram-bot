@@ -18,6 +18,7 @@ import {
   findUserByUsername,
   getOrCreateUser,
   markReferral,
+  refundRequest,
   redeemPromo,
   requestStatus,
 } from "./storage.js";
@@ -101,7 +102,8 @@ async function ask(ctx: BotContext): Promise<void> {
 
 async function handleQuestion(ctx: BotContext, text: string): Promise<void> {
   const user = userFrom(ctx);
-  if (!consumeRequest(user)) {
+  const consumption = consumeRequest(user);
+  if (!consumption) {
     clearPending(ctx);
     await ctx.reply(
       "⏳ Дневной лимит исчерпан. Пригласите друзей или купите дополнительные запросы за алмазы.",
@@ -115,8 +117,9 @@ async function handleQuestion(ctx: BotContext, text: string): Promise<void> {
     const answer = await answerQuestion(text, displayName(user));
     await ctx.reply(answer, { reply_markup: mainMenu(ctx) });
   } catch (error) {
+    refundRequest(user, consumption);
     await ctx.reply(
-      "⚠️ Не удалось получить ответ от AI. Запрос не пропал — попробуйте ещё раз позже.",
+      "⚠️ AI-сервис временно недоступен. Ваш запрос возвращён — попробуйте ещё раз немного позже.",
       { reply_markup: mainMenu(ctx) },
     );
     console.error(error);
@@ -125,7 +128,8 @@ async function handleQuestion(ctx: BotContext, text: string): Promise<void> {
 
 async function handleImage(ctx: BotContext, prompt: string): Promise<void> {
   const user = userFrom(ctx);
-  if (!consumeRequest(user)) {
+  const consumption = consumeRequest(user);
+  if (!consumption) {
     clearPending(ctx);
     await ctx.reply("⏳ Лимит запросов исчерпан. Получите дополнительные запросы в разделе покупки.", {
       reply_markup: mainMenu(ctx),
@@ -141,8 +145,9 @@ async function handleImage(ctx: BotContext, prompt: string): Promise<void> {
       reply_markup: mainMenu(ctx),
     });
   } catch (error) {
+    refundRequest(user, consumption);
     await ctx.reply(
-      "⚠️ Не удалось создать изображение. Запрос не пропал — попробуйте другое описание.",
+      "⚠️ Не удалось создать изображение. Ваш запрос возвращён — попробуйте ещё раз позже.",
       { reply_markup: mainMenu(ctx) },
     );
     console.error(error);

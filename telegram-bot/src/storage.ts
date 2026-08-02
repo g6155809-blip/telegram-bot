@@ -114,24 +114,32 @@ export function requestStatus(user: User): { used: number; limit: number | "∞"
   return { used: user.dailyUsed, limit: 5 + user.bonusRequests, remaining };
 }
 
-export function consumeRequest(user: User): boolean {
+export type RequestConsumption = "daily" | "bonus" | "unlimited";
+
+export function consumeRequest(user: User): RequestConsumption | false {
   resetIfNeeded(user);
   if (user.unlimited) {
     user.dailyUsed += 1;
     save();
-    return true;
+    return "unlimited";
   }
   if (user.dailyUsed < 5) {
     user.dailyUsed += 1;
     save();
-    return true;
+    return "daily";
   }
   if (user.bonusRequests > 0) {
     user.bonusRequests -= 1;
     save();
-    return true;
+    return "bonus";
   }
   return false;
+}
+
+export function refundRequest(user: User, consumption: RequestConsumption): void {
+  if (consumption === "bonus") user.bonusRequests += 1;
+  else if (user.dailyUsed > 0) user.dailyUsed -= 1;
+  save();
 }
 
 export function buyRequests(user: User, amount: number, cost: number): boolean {

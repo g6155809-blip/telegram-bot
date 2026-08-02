@@ -1,1 +1,2 @@
 - [Railway pnpm compatibility](railway-pnpm-lockfile.md) — Railway may use pnpm 9, so regenerate the lockfile with that version before relying on frozen installs.
+- [ZModeler texture workflow](zmodeler-texture-workflow.md) — ZModeler’s material picker requests PNG; a textureless DFF can use baked vertex colors when no TXD should be shipped.

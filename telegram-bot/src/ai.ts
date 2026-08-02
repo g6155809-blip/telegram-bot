@@ -7,31 +7,43 @@ type ChatMessage = {
 
 function aiBaseUrl(): string {
   return usesReplitAiIntegration
-    ? config.AI_INTEGRATIONS_OPENAI_BASE_URL!
-    : config.OPENAI_BASE_URL;
+    ? config.AI_INTEGRATIONS_OPENAI_BASE_URL!.trim()
+    : config.OPENAI_BASE_URL.trim();
 }
 
 function aiKey(): string {
   return usesReplitAiIntegration
-    ? config.AI_INTEGRATIONS_OPENAI_API_KEY!
-    : config.OPENAI_API_KEY || "";
+    ? config.AI_INTEGRATIONS_OPENAI_API_KEY!.trim()
+    : config.OPENAI_API_KEY?.trim() || "";
 }
 
-function chatModel(): string {
+function configuredChatModel(): string | undefined {
   const configured = config.OPENAI_CHAT_MODEL.trim();
-  // gpt-5.6-terra is available through Replit's proxy, not a regular
-  // OpenAI API key. Avoid carrying that setting into a Railway deployment.
-  if (!usesReplitAiIntegration && configured.startsWith("gpt-5.6")) {
-    return "gpt-4o-mini";
-  }
-  return configured;
+  return configured && configured.toLowerCase() !== "auto" ? configured : undefined;
 }
 
 function isGpt5Model(model: string): boolean {
-  return /^gpt-5|^o[134]/.test(model);
+  return /^(gpt-5|o[134])/.test(model);
 }
 
-async function aiFetch(pathname: string, body: unknown): Promise<Response> {
+function modelCandidates(): string[] {
+  const configured = configuredChatModel();
+  const defaults = usesReplitAiIntegration
+    ? ["gpt-5.6-terra"]
+    : ["gpt-4o-mini", "gpt-4.1-mini"];
+  const candidates = configured ? [configured, ...defaults] : defaults;
+  return [...new Set(candidates)];
+}
+
+function shouldRetryStatus(status: number): boolean {
+  return [408, 409, 429, 500, 502, 503, 504].includes(status);
+}
+
+async function aiFetch(
+  pathname: string,
+  body: unknown,
+  options: { retryModel?: boolean } = {},
+): Promise<Response> {
   const url = `${aiBaseUrl().replace(/\/$/, "")}${pathname}`;
   const maxAttempts = 3;
   let lastResponse: Response | undefined;
@@ -47,7 +59,7 @@ async function aiFetch(pathname: string, body: unknown): Promise<Response> {
         signal: AbortSignal.timeout(60_000),
         body: JSON.stringify(body),
       });
-      if (response.ok || ![408, 409, 429, 500, 502, 503, 504].includes(response.status)) {
+      if (response.ok || !shouldRetryStatus(response.status)) {
         return response;
       }
       lastResponse = response;
@@ -58,6 +70,7 @@ async function aiFetch(pathname: string, body: unknown): Promise<Response> {
     await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
   }
 
+  if (!options.retryModel && lastResponse) return lastResponse;
   return lastResponse!;
 }
 
@@ -70,33 +83,50 @@ async function describeApiError(response: Response): Promise<string> {
 }
 
 export async function answerQuestion(question: string, userName: string): Promise<string> {
-  const model = chatModel();
-  const tokenLimit = isGpt5Model(model)
-    ? { max_completion_tokens: 8192 }
-    : { max_tokens: 8192 };
-  const response = await aiFetch("/chat/completions", {
-    model,
-    ...tokenLimit,
-    messages: [
-      {
-        role: "system",
-        content:
-          "Ты профессиональный русскоязычный AI-помощник. Отвечай точно, понятно и структурированно. Если вопрос зависит от актуальных данных, честно укажи ограничение. Не помогай с вредоносными, мошенническими, спамными или незаконными действиями.",
-      },
-      {
-        role: "user",
-        content: `Пользователь ${userName} спрашивает: ${question}`,
-      },
-    ] satisfies ChatMessage[],
-  });
-  if (!response.ok) {
-    const error = await describeApiError(response);
-    throw new Error(`${error} (provider: ${usesReplitAiIntegration ? "Replit AI" : "OpenAI"})`);
+  let lastError = "AI returned an empty answer";
+  const messages = [
+    {
+      role: "system" as const,
+      content:
+        "Ты профессиональный русскоязычный AI-помощник. Отвечай точно, понятно и структурированно. Если вопрос зависит от актуальных данных, честно укажи ограничение. Не помогай с вредоносными, мошенническими, спамными или незаконными действиями.",
+    },
+    {
+      role: "user" as const,
+      content: `Пользователь ${userName} спрашивает: ${question}`,
+    },
+  ] satisfies ChatMessage[];
+
+  for (const model of modelCandidates()) {
+    const tokenLimit = isGpt5Model(model)
+      ? { max_completion_tokens: 8192 }
+      : { max_tokens: 8192 };
+    const response = await aiFetch(
+      "/chat/completions",
+      { model, ...tokenLimit, messages },
+      { retryModel: true },
+    );
+
+    if (!response.ok) {
+      lastError = await describeApiError(response);
+      // A 400/404 commonly means an unavailable model or unsupported
+      // parameter. Try the next provider-compatible model.
+      if ([400, 404].includes(response.status)) continue;
+      throw new Error(
+        `${lastError} (provider: ${usesReplitAiIntegration ? "Replit AI" : "OpenAI"})`,
+      );
+    }
+
+    const data = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const answer = data.choices?.[0]?.message?.content?.trim();
+    if (answer) return answer;
+    lastError = `AI returned an empty answer for model ${model}`;
   }
-  const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
-  const answer = data.choices?.[0]?.message?.content?.trim();
-  if (!answer) throw new Error("AI returned an empty answer");
-  return answer;
+
+  throw new Error(
+    `${lastError} (provider: ${usesReplitAiIntegration ? "Replit AI" : "OpenAI"})`,
+  );
 }
 
 export async function generateImage(prompt: string): Promise<Buffer> {

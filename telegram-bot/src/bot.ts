@@ -122,7 +122,7 @@ async function handleQuestion(ctx: BotContext, text: string): Promise<void> {
       "⚠️ AI-сервис временно недоступен. Ваш запрос возвращён — попробуйте ещё раз немного позже.",
       { reply_markup: mainMenu(ctx) },
     );
-    console.error(error);
+    console.error("AI question failed", error);
   }
 }
 
@@ -150,7 +150,7 @@ async function handleImage(ctx: BotContext, prompt: string): Promise<void> {
       "⚠️ Не удалось создать изображение. Ваш запрос возвращён — попробуйте ещё раз позже.",
       { reply_markup: mainMenu(ctx) },
     );
-    console.error(error);
+    console.error("AI image failed", error);
   }
 }
 

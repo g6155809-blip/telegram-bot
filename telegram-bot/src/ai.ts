@@ -36,13 +36,14 @@ function modelCandidates(): string[] {
 }
 
 function shouldRetryStatus(status: number): boolean {
-  return [408, 409, 429, 500, 502, 503, 504].includes(status);
+  // Do not retry 429: repeating a quota/rate-limit failure only burns time
+  // and can make the provider throttle the key for longer.
+  return [408, 409, 500, 502, 503, 504].includes(status);
 }
 
 async function aiFetch(
   pathname: string,
   body: unknown,
-  options: { retryModel?: boolean } = {},
 ): Promise<Response> {
   const url = `${aiBaseUrl().replace(/\/$/, "")}${pathname}`;
   const maxAttempts = 3;
@@ -70,16 +71,34 @@ async function aiFetch(
     await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
   }
 
-  if (!options.retryModel && lastResponse) return lastResponse;
   return lastResponse!;
 }
 
-async function describeApiError(response: Response): Promise<string> {
+type ProviderError = {
+  message?: string;
+  type?: string;
+  code?: string;
+};
+
+async function describeApiError(response: Response): Promise<{
+  text: string;
+  providerError?: ProviderError;
+}> {
   const body = await response.text().catch(() => "");
   const compact = body.replace(/\s+/g, " ").trim().slice(0, 500);
-  return compact
-    ? `AI request failed with status ${response.status}: ${compact}`
-    : `AI request failed with status ${response.status}`;
+  let providerError: ProviderError | undefined;
+  try {
+    const parsed = JSON.parse(body) as { error?: ProviderError };
+    providerError = parsed.error;
+  } catch {
+    // Some compatible providers return plain text instead of JSON.
+  }
+  return {
+    text: compact
+      ? `AI request failed with status ${response.status}: ${compact}`
+      : `AI request failed with status ${response.status}`,
+    providerError,
+  };
 }
 
 export class AiServiceError extends Error {
@@ -99,7 +118,10 @@ export class AiServiceError extends Error {
       return `⚠️ У ${aiProviderName} нет доступного баланса для API. Пополните баланс или включите оплату API.`;
     }
     if (this.status === 429) {
-      return `⚠️ ${aiProviderName} временно ограничил запросы. Проверьте лимиты и баланс API, затем попробуйте снова.`;
+      if (this.message.includes("insufficient_quota")) {
+        return `⚠️ У ${aiProviderName} закончилась квота API. Добавьте способ оплаты или пополните баланс в настройках API, затем перезапустите Railway.`;
+      }
+      return `⚠️ ${aiProviderName} временно ограничил частоту запросов. Подождите немного и попробуйте снова.`;
     }
     return "⚠️ AI-сервис временно недоступен. Запрос возвращён — попробуйте ещё раз позже.";
   }
@@ -123,19 +145,20 @@ export async function answerQuestion(question: string, userName: string): Promis
     const tokenLimit = isGpt5Model(model)
       ? { max_completion_tokens: 8192 }
       : { max_tokens: 8192 };
-    const response = await aiFetch(
-      "/chat/completions",
-      { model, ...tokenLimit, messages },
-      { retryModel: true },
-    );
+    const response = await aiFetch("/chat/completions", {
+      model,
+      ...tokenLimit,
+      messages,
+    });
 
     if (!response.ok) {
-      lastError = await describeApiError(response);
+      const providerError = await describeApiError(response);
+      lastError = providerError.text;
       // A 400/404 commonly means an unavailable model or unsupported
       // parameter. Try the next provider-compatible model.
       if ([400, 404].includes(response.status)) continue;
       throw new AiServiceError(
-        `${lastError} (provider: ${usesReplitAiIntegration ? "Replit AI" : "OpenAI"})`,
+        `${lastError} ${providerError.providerError?.code ?? ""} (provider: ${usesReplitAiIntegration ? "Replit AI" : "OpenAI"})`,
         response.status,
       );
     }
@@ -161,8 +184,9 @@ export async function generateImage(prompt: string): Promise<Buffer> {
     n: 1,
   });
   if (!response.ok) {
+    const providerError = await describeApiError(response);
     throw new AiServiceError(
-      `${await describeApiError(response)} (provider: ${aiProviderName})`,
+      `${providerError.text} ${providerError.providerError?.code ?? ""} (provider: ${aiProviderName})`,
       response.status,
     );
   }

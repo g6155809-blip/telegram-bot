@@ -1,0 +1,1 @@
+- [Railway pnpm compatibility](railway-pnpm-lockfile.md) — Railway may use pnpm 9, so regenerate the lockfile with that version before relying on frozen installs.

@@ -2,6 +2,8 @@
 
 Для ZModeler скачай полный архив:
 
+- `original_arachnid_hero_dff_only.dff` — цвет встроен в DFF, TXD не нужен
+- `original_arachnid_hero_dff_only.zip` — архив только с DFF-only моделью
 - `original_arachnid_hero_zmodeler_complete.zip` — DFF, TXD и PNG вместе
 - `BASECOLOR.png` — отдельная PNG-текстура, которую нужно выбрать в окне
   `Select a .png image`
@@ -17,3 +19,8 @@
 `Select a .png image` выбери файл `BASECOLOR.png`. Не выбирай там `.txd`:
 это окно принимает только PNG. Файл `.txd` нужен для GTA SA/игрового
 пакета и должен лежать рядом с DFF.
+
+Для варианта без TXD открывай `original_arachnid_hero_dff_only.dff`.
+У этой версии цвет запечён в vertex colors, поэтому отдельный TXD или PNG
+не требуется. Изображение может быть немного менее детальным, чем у
+текстурной версии.

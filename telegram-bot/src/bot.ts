@@ -1,5 +1,5 @@
 import { Bot, InlineKeyboard, type Context, InputFile, session, type SessionFlavor } from "grammy";
-import { answerQuestion, generateImage } from "./ai.js";
+import { AiServiceError, answerQuestion, generateImage } from "./ai.js";
 import { config, githubUrl, normalizeUsername, ownerId } from "./config.js";
 import {
   adminKeyboard,
@@ -119,7 +119,9 @@ async function handleQuestion(ctx: BotContext, text: string): Promise<void> {
   } catch (error) {
     refundRequest(user, consumption);
     await ctx.reply(
-      "⚠️ AI-сервис временно недоступен. Ваш запрос возвращён — попробуйте ещё раз немного позже.",
+      error instanceof AiServiceError
+        ? error.userMessage
+        : "⚠️ AI-сервис временно недоступен. Ваш запрос возвращён — попробуйте ещё раз немного позже.",
       { reply_markup: mainMenu(ctx) },
     );
     console.error("AI question failed", error);
@@ -147,7 +149,9 @@ async function handleImage(ctx: BotContext, prompt: string): Promise<void> {
   } catch (error) {
     refundRequest(user, consumption);
     await ctx.reply(
-      "⚠️ Не удалось создать изображение. Ваш запрос возвращён — попробуйте ещё раз позже.",
+      error instanceof AiServiceError
+        ? error.userMessage
+        : "⚠️ Не удалось создать изображение. Ваш запрос возвращён — попробуйте ещё раз позже.",
       { reply_markup: mainMenu(ctx) },
     );
     console.error("AI image failed", error);

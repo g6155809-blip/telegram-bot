@@ -1,4 +1,4 @@
-import { config } from "./config.js";
+import { config, usesReplitAiIntegration } from "./config.js";
 
 type ChatMessage = {
   role: "system" | "user" | "assistant";
@@ -6,23 +6,59 @@ type ChatMessage = {
 };
 
 function aiBaseUrl(): string {
-  return config.AI_INTEGRATIONS_OPENAI_BASE_URL || config.OPENAI_BASE_URL;
+  return usesReplitAiIntegration
+    ? config.AI_INTEGRATIONS_OPENAI_BASE_URL!
+    : config.OPENAI_BASE_URL;
 }
 
 function aiKey(): string {
-  return config.AI_INTEGRATIONS_OPENAI_API_KEY || config.OPENAI_API_KEY || "";
+  return usesReplitAiIntegration
+    ? config.AI_INTEGRATIONS_OPENAI_API_KEY!
+    : config.OPENAI_API_KEY || "";
+}
+
+function chatModel(): string {
+  const configured = config.OPENAI_CHAT_MODEL.trim();
+  // gpt-5.6-terra is available through Replit's proxy, not a regular
+  // OpenAI API key. Avoid carrying that setting into a Railway deployment.
+  if (!usesReplitAiIntegration && configured.startsWith("gpt-5.6")) {
+    return "gpt-4o-mini";
+  }
+  return configured;
+}
+
+function isGpt5Model(model: string): boolean {
+  return /^gpt-5|^o[134]/.test(model);
 }
 
 async function aiFetch(pathname: string, body: unknown): Promise<Response> {
-  return fetch(`${aiBaseUrl().replace(/\/$/, "")}${pathname}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${aiKey()}`,
-    },
-    signal: AbortSignal.timeout(60_000),
-    body: JSON.stringify(body),
-  });
+  const url = `${aiBaseUrl().replace(/\/$/, "")}${pathname}`;
+  const maxAttempts = 3;
+  let lastResponse: Response | undefined;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${aiKey()}`,
+        },
+        signal: AbortSignal.timeout(60_000),
+        body: JSON.stringify(body),
+      });
+      if (response.ok || ![408, 409, 429, 500, 502, 503, 504].includes(response.status)) {
+        return response;
+      }
+      lastResponse = response;
+    } catch (error) {
+      if (attempt === maxAttempts - 1) throw error;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
+  }
+
+  return lastResponse!;
 }
 
 async function describeApiError(response: Response): Promise<string> {
@@ -34,9 +70,13 @@ async function describeApiError(response: Response): Promise<string> {
 }
 
 export async function answerQuestion(question: string, userName: string): Promise<string> {
+  const model = chatModel();
+  const tokenLimit = isGpt5Model(model)
+    ? { max_completion_tokens: 8192 }
+    : { max_tokens: 8192 };
   const response = await aiFetch("/chat/completions", {
-    model: config.OPENAI_CHAT_MODEL,
-    max_completion_tokens: 8192,
+    model,
+    ...tokenLimit,
     messages: [
       {
         role: "system",
@@ -49,7 +89,10 @@ export async function answerQuestion(question: string, userName: string): Promis
       },
     ] satisfies ChatMessage[],
   });
-  if (!response.ok) throw new Error(await describeApiError(response));
+  if (!response.ok) {
+    const error = await describeApiError(response);
+    throw new Error(`${error} (provider: ${usesReplitAiIntegration ? "Replit AI" : "OpenAI"})`);
+  }
   const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
   const answer = data.choices?.[0]?.message?.content?.trim();
   if (!answer) throw new Error("AI returned an empty answer");

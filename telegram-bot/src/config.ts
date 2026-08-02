@@ -25,15 +25,20 @@ if (!parsed.success) {
   throw new Error(`Invalid environment configuration: ${details}`);
 }
 
-if (!parsed.data.AI_INTEGRATIONS_OPENAI_API_KEY && !parsed.data.OPENAI_API_KEY) {
+const hasReplitAiIntegration =
+  Boolean(parsed.data.AI_INTEGRATIONS_OPENAI_BASE_URL) &&
+  Boolean(parsed.data.AI_INTEGRATIONS_OPENAI_API_KEY);
+
+if (!hasReplitAiIntegration && !parsed.data.OPENAI_API_KEY) {
   throw new Error(
-    "Configure Replit AI Integration (AI_INTEGRATIONS_OPENAI_API_KEY) or OPENAI_API_KEY.",
+    "Configure both Replit AI Integration variables or OPENAI_API_KEY.",
   );
 }
 
 export const config = parsed.data;
 export const ownerId = config.ADMIN_TELEGRAM_ID;
 export const githubUrl = "https://github.com/g6155809-blip/telegram-bot";
+export const usesReplitAiIntegration = hasReplitAiIntegration;
 
 export function normalizeUsername(username?: string): string | undefined {
   return username?.replace(/^@/, "").trim().toLowerCase() || undefined;
